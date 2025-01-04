@@ -257,11 +257,19 @@ $conn->close();
             const cartItems = [];
 
             $(document).on('click', '.add-to-cart', function () {
-                const product = $(this).data('product');
-                const price = parseFloat($(this).data('price'));
-                cartItems.push({ product, price });
-                updateCart();
-            });
+    const product = $(this).data('product');
+    const price = parseFloat($(this).data('price'));
+
+    // Send product and price to the server
+    $.post('add_to_cart.php', { product: product, price: price }, function (response) {
+        if (response.success) {
+            alert('Item added to cart!');
+        } else {
+            alert('Failed to add item to cart.');
+        }
+    }, 'json');
+});
+
 
             function updateCart() {
                 const cartList = $('#cart-items');
