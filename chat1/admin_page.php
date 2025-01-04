@@ -1,5 +1,4 @@
 <?php
-// admin_page.php
 session_start();
 
 // Ensure admin is logged in
@@ -18,41 +17,6 @@ $conn = new mysqli($host, $user, $password, $database);
 if ($conn->connect_error) {
     die('Database connection failed: ' . $conn->connect_error);
 }
-
-// Handle AJAX requests for sending and receiving messages
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $action = $_POST['action'];
-
-    if ($action === 'send_message') {
-        $message = $_POST['message'] ?? '';
-        $userID = $_POST['userID'] ?? 0;
-
-        if ($message && $userID) {
-            $stmt = $conn->prepare("INSERT INTO messages (sender, message, UserID) VALUES ('admin', ?, ?)");
-            $stmt->bind_param('si', $message, $userID);
-            $stmt->execute();
-            $stmt->close();
-
-            echo json_encode(['success' => true]);
-        } else {
-            echo json_encode(['success' => false, 'error' => 'Message and UserID are required']);
-        }
-        exit;
-    } elseif ($action === 'get_messages') {
-        $stmt = $conn->prepare("SELECT sender, message, timestamp, UserID FROM messages ORDER BY timestamp ASC");
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $messages = [];
-
-        while ($row = $result->fetch_assoc()) {
-            $messages[] = $row;
-        }
-
-        $stmt->close();
-        echo json_encode($messages);
-        exit;
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -60,97 +24,128 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Chat</title>
+    <title>Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        #admin-chat-container {
-            margin: 20px auto;
-            max-width: 800px;
-        }
-
-        #chat-box {
-            height: 400px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding: 10px;
-        }
-
-        .message {
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 10px;
-        }
-
-        .message.admin {
-            background-color: #f8d7da;
-            text-align: right;
-        }
-
-        .message.client {
-            background-color: #d1e7dd;
-            text-align: left;
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div id="admin-chat-container">
-        <h1 class="text-center">Admin Chat Interface</h1>
-        <div id="chat-box" class="border">
-            <!-- Messages will appear here -->
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Admin Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sell-dashboard">Sell Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#analytics-dashboard">Sell Analytics</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin_chat.php">Admin Chat</a>
+                    </li>
+                </ul>
+                <a href="logout.php" class="btn btn-danger ms-auto">Logout</a>
+            </div>
         </div>
-        <form id="reply-form">
-            <div class="mb-3">
-                <label for="userID" class="form-label">Replying to User ID</label>
-                <input type="number" class="form-control" id="userID" placeholder="Enter User ID" required>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Sell Dashboard Section -->
+        <section id="sell-dashboard">
+            <h2>Sell Dashboard</h2>
+            <p>View all client orders below:</p>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Client ID</th>
+                        <th>Total Price</th>
+                        <th>Shipping Address</th>
+                        <th>Payment Method</th>
+                        <th>Order Status</th>
+                        <th>Order Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $result = $conn->query("SELECT * FROM orders");
+                    if ($result->num_rows > 0) {
+                        while ($row = $result->fetch_assoc()): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($row['OrderID']) ?></td>
+                                <td><?= htmlspecialchars($row['UserID']) ?></td>
+                                <td>$<?= number_format($row['TotalPrice'], 2) ?></td>
+                                <td><?= htmlspecialchars($row['ShippingAddress']) ?></td>
+                                <td><?= htmlspecialchars($row['PaymentMethod']) ?></td>
+                                <td><?= htmlspecialchars($row['OrderStatus']) ?></td>
+                                <td><?= htmlspecialchars($row['OrderDate']) ?></td>
+                            </tr>
+                        <?php endwhile;
+                    } else {
+                        echo "<tr><td colspan='7' class='text-center'>No orders found</td></tr>";
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Analytics Dashboard Section -->
+        <section id="analytics-dashboard" class="mt-5">
+            <h2>Sell Analytics</h2>
+            <p>Visualize sales trends and order statistics:</p>
+            <div class="row">
+                <div class="col-md-6">
+                    <canvas id="monthlySalesChart"></canvas>
+                </div>
+                <div class="col-md-6">
+                    <canvas id="orderStatusChart"></canvas>
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="message" class="form-label">Message</label>
-                <textarea class="form-control" id="message" rows="3" placeholder="Type your reply..." required></textarea>
-            </div>
-            <button class="btn btn-primary" type="submit">Send Reply</button>
-        </form>
+        </section>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        $(document).ready(function () {
-            const chatBox = $('#chat-box');
+        // Fetch analytics data
+        fetch('fetch_analytics_data.php')
+            .then(response => response.json())
+            .then(data => {
+                // Monthly Sales Line Graph
+                const monthlySalesCtx = document.getElementById('monthlySalesChart').getContext('2d');
+                new Chart(monthlySalesCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.sales.labels,
+                        datasets: [{
+                            label: 'Monthly Sales',
+                            data: data.sales.data,
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { responsive: true }
+                });
 
-            function fetchMessages() {
-                $.post('admin_page.php', { action: 'get_messages' }, function (data) {
-                    chatBox.empty();
-                    data.forEach(msg => {
-                        const messageClass = msg.sender === 'admin' ? 'admin' : 'client';
-                        chatBox.append(
-                            `<div class="message ${messageClass}"><strong>${msg.sender}</strong> [${msg.timestamp}]<br>${msg.message}</div>`
-                        );
-                    });
-                    chatBox.scrollTop(chatBox[0].scrollHeight);
-                }, 'json');
-            }
-
-            $('#reply-form').submit(function (e) {
-                e.preventDefault();
-                const message = $('#message').val();
-                const userID = $('#userID').val();
-
-                if (message.trim() && userID) {
-                    $.post('admin_page.php', { action: 'send_message', message, userID }, function (response) {
-                        if (response.success) {
-                            $('#message').val('');
-                            $('#userID').val('');
-                            fetchMessages();
-                        }
-                    }, 'json');
-                }
-            });
-
-            // Fetch messages every 2 seconds
-            setInterval(fetchMessages, 2000);
-
-            // Initial fetch
-            fetchMessages();
-        });
+                // Order Status Doughnut Chart
+                const statusCtx = document.getElementById('orderStatusChart').getContext('2d');
+                new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.orderStatus.labels,
+                        datasets: [{
+                            data: data.orderStatus.data,
+                            backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56', '#4BC0C0']
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+            })
+            .catch(error => console.error('Error fetching analytics data:', error));
     </script>
 </body>
 </html>

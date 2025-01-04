@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($usernameOrEmail) || empty($password)) {
         $error = 'Please fill out all fields.';
     } else {
+        // Prepare SQL to check for user by username or email
         $stmt = $conn->prepare("SELECT * FROM users WHERE (Username = ? OR Email = ?)");
         $stmt->bind_param("ss", $usernameOrEmail, $usernameOrEmail);
         $stmt->execute();
@@ -31,12 +32,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($result->num_rows == 1) {
             $user = $result->fetch_assoc();
-            if (password_verify($password, $user['Password'])) {
-                session_regenerate_id(true);
-                $_SESSION['UserID'] = $user['UserID'];
-                $_SESSION['sender'] = $user['Username'];
 
-                header('Location: chat_page.php');
+            // Verify password
+            if (password_verify($password, $user['Password'])) {
+                // Regenerate session ID for security
+                session_regenerate_id(true);
+
+                // Set session variables
+                $_SESSION['UserID'] = $user['UserID'];
+                $_SESSION['Username'] = $user['Username'];
+                $_SESSION['Role'] = $user['Role']; // Role column in database: 'admin' or 'user'
+
+                // Redirect based on role
+                if ($user['Role'] === 'admin') {
+                    header('Location: admin_page.php'); // Redirect Admin
+                } else {
+                    header('Location: chat_page.php'); // Redirect Client
+                }
                 exit;
             } else {
                 $error = 'Invalid password.';
